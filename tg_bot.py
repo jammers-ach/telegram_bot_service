@@ -9,8 +9,17 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 logger = logging.getLogger(__name__)
 
-
 class TelegramBot:
+
+    only_authorized = True
+    command_registry = []
+
+    @classmethod
+    def command(cls, foo):
+        '''decorator to indicate this a command'''
+        cls.command_registry.append(foo)
+        return foo
+
     def __init__(self):
         if not hasattr(self, 'name'):
             raise NotImplementedError("Bot must have a name")
@@ -22,9 +31,11 @@ class TelegramBot:
             if x not in self.config:
                 raise Exception(f"Missing {x} from config")
 
-        self.chat_ids = self.config["chat_ids"].split(",")
+        self.chat_ids = [int(i.strip()) for i in self.config["chat_ids"].split(",")]
         self.bot_token = self.config["bot_token"]
         self._bot_init()
+
+        self.commands = []
 
 
     def load_config(self):
@@ -49,8 +60,22 @@ class TelegramBot:
         logger.info("building the telegram bot")
         # initilise the application
         self.application = Application.builder().token(self.bot_token).build()
+        global command
 
-        # add handler for all the commands
+        # each command in the command registry can't directly be passed
+        # because it doesn't have a reference to self. So we wrap it in
+        # a funciton that does
+        def call(foo):
+            async def msg(update, context):
+                # for some reason we're not propogating the message context
+                # for now
+                await foo(self, update)
+
+            return msg
+
+        for command in self.command_registry:
+            logger.info("Found command %s", command.__name__)
+            self.application.add_handler(CommandHandler(command.__name__, call(command)))
 
         # add handler for non command messages
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._msghandle))
@@ -75,6 +100,7 @@ class TelegramBot:
 
 
     async def _msghandle(self, update, context):
+        self._authorized_check(update)
         logger.info("Got message: %s", update.message.text)
         await self.handle_update(update)
 
@@ -84,20 +110,57 @@ class TelegramBot:
         '''
         raise NotImplementedError("Bot implement handle_update")
 
+
+    def _authorized_check(self, update):
+        if self.only_authorized:
+            if update.message.chat_id not in self.chat_ids:
+                raise PermissionError(f"{update.message.chat_id} not in authorised chat list")
+        else:
+            return False
+
+
+
 class EchoBot(TelegramBot):
+    '''Simple telegram bot that echos what you've just said,
+
+    after it thinks for a bit.
+
+    It has two commands:
+
+        /help to display help text
+        /change <new text> to change the thinking text'''
     name = "EchoBot"
 
+    thinking_text = "Let me just process.."
+
     async def handle_update(self, update):
-        await update.message.reply_text(f"Let me just process..")
+        await update.message.reply_text(self.thinking_text)
         await asyncio.sleep(1)
         await update.message.reply_text(f"You said: {update.message.text}")
 
 
+    @TelegramBot.command
+    async def help(self, update):
+
+        helptext='''Simple telegram bot that echos what you've just said,
+
+    after it thinks for a bit.
+
+    It has two commands:
+
+        /help to display help text
+        /change <new text> to change the thinking text'''
+        await update.message.reply_text(helptext)
+
+    @TelegramBot.command
+    async def change(self, update):
+        self.thinking_text = update.message.text.replace("/change ","")
+        await update.message.reply_text(f"Ok I will now set the thinking text to: {self.thinking_text}")
+
+
 def run():
     bot = EchoBot()
-
     bot.start()
-
 
 
 if __name__ == '__main__':
