@@ -91,9 +91,9 @@ class TelegramBot:
 
     async def post_startup(self):
         '''called when this bot has just started up'''
-        self.send_message(self.chat_ids[0], f"{self.name} is starting up")
+        self._send_message(self.chat_ids[0], f"{self.name} is starting up")
 
-    def send_message(self, chat_id, message):
+    def _send_message(self, chat_id, message):
         '''Sends :message: to :chat_id:'''
         assert chat_id in self.chat_ids, "unauthorised chat id"
         self.application.create_task(self.application.bot.send_message(chat_id=chat_id, text=message))
@@ -117,6 +117,31 @@ class TelegramBot:
                 raise PermissionError(f"{update.message.chat_id} not in authorised chat list")
         else:
             return False
+
+
+    async def single_send_msg(self, message, chat_id=None):
+        '''starts the bot, sends a sync message to the first contact in the list
+
+        then stops the bot'''
+        if not chat_id:
+            chat_id = self.chat_ids[0]
+
+        def send_msg():
+            self._send_message(self.chat_ids[0], message)
+
+        await self._single_do(send_msg)
+
+
+
+    async def _single_do(self, function):
+        '''starts the bot, then calls a function, then stops the bot'''
+        await self.application.initialize()
+        await self.application.start()
+        function()
+        await self.application.stop()
+        await self.application.shutdown()
+
+
 
 
 
@@ -158,9 +183,21 @@ class EchoBot(TelegramBot):
         await update.message.reply_text(f"Ok I will now set the thinking text to: {self.thinking_text}")
 
 
+
+
+
 def run():
-    bot = EchoBot()
-    bot.start()
+    parser = argparse.ArgumentParser(description="Echo bot, a pytho bot which echos back all of the text you send")
+    parser.add_argument('--send', metavar='MESSAGE', help='Send a message')
+
+    args = parser.parse_args()
+
+    if args.send:
+        bot = EchoBot()
+        asyncio.run(bot.single_send_msg(args.send))
+    else:
+        bot = EchoBot()
+        bot.start()
 
 
 if __name__ == '__main__':
