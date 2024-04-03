@@ -1,0 +1,17 @@
+[Unit]
+Description=Telegram Bot Service
+After=network.target
+
+[Service]
+User=user
+Group=user
+WorkingDirectory=/home/user/bots/example/
+ExecStart=/usr/bin/python3 /home/user/bots/example/tg_bot.py
+Restart=always
+RestartSec=3
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=tg_bot
+
+[Install]
+WantedBy=multi-user.target
