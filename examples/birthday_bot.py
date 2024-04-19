@@ -41,7 +41,7 @@ import asyncio
 import gspread
 import datetime
 
-from tg_bot import TelegramBot
+from tg_bot.bot  import TelegramBot
 
 logger = logging.getLogger(__name__)
 
