@@ -128,7 +128,7 @@ class TelegramBot:
             chat_id = self.chat_ids[0]
 
         async def send_msg():
-            await self._send_message(self.chat_ids[0], message)
+            await self._send_message(chat_ids, message)
 
         await self._single_do(send_msg)
 
