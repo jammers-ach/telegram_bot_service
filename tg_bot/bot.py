@@ -136,6 +136,7 @@ class TelegramBot:
 
     async def _single_do(self, function):
         '''starts the bot, then calls a function, then stops the bot'''
+        self._bot_init() #HACK - reinitilise the bot's queues since we're not doing it in it's own handler
         await self.application.initialize()
         await self.application.start()
         await function()
