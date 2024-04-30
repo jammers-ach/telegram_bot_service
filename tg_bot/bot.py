@@ -120,15 +120,17 @@ class TelegramBot:
                 raise PermissionError(f"{update.message.chat_id} not in authorised chat list")
 
 
-    async def single_send_msg(self, message, chat_id=None):
+    async def single_send_msg(self, message, chat_ids=None):
         '''starts the bot, sends a sync message to the first contact in the list
+        or a list of contacts
 
         then stops the bot'''
-        if not chat_id:
-            chat_id = self.chat_ids[0]
+        if not chat_ids:
+            chat_ids = [self.chat_ids[0]]
 
         async def send_msg():
-            await self._send_message(chat_ids, message)
+            for chat_id in chat_ids:
+                await self._send_message(chat_id, message)
 
         await self._single_do(send_msg)
 

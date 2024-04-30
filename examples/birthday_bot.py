@@ -171,24 +171,21 @@ class BirthdayBot(TelegramBot):
     async def todays(self):
         msg = self.make_birthday_msg(0)
         if msg:
-            for chat_id in self.chat_ids:
-                await self.single_send_msg(msg, chat_id=chat_id)
+            await self.single_send_msg(msg, chat_ids=self.chat_ids)
         else:
             print("no birthdays today")
 
     async def birthdays(self, days):
         msg = self.make_birthday_msg(days)
         if msg:
-            for chat_id in self.chat_ids:
-                await self.single_send_msg(msg, chat_id=chat_id)
+            await self.single_send_msg(msg, chat_ids=self.chat_ids)
         else:
             print(f"no birthdays in the next {days}")
 
     async def presents(self, days):
         msg = self.make_birthday_msg(days, lambda x: x["Present"] != "")
         if msg:
-            for chat_id in self.chat_ids:
-                await self.single_send_msg(msg, chat_id=chat_id)
+            await self.single_send_msg(msg, chat_ids=self.chat_ids)
         else:
             print(f"no birthdays in the next {days}")
 
