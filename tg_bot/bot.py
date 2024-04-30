@@ -92,12 +92,14 @@ class TelegramBot:
 
     async def post_startup(self):
         '''called when this bot has just started up'''
-        self._send_message(self.chat_ids[0], f"{self.name} is starting up")
+        await self._send_message(self.chat_ids[0], f"{self.name} is starting up")
 
-    def _send_message(self, chat_id, message):
+    async def _send_message(self, chat_id, message):
         '''Sends :message: to :chat_id:'''
         assert chat_id in self.chat_ids, "unauthorised chat id"
-        self.application.create_task(self.application.bot.send_message(chat_id=chat_id, text=message))
+        async def job(context):
+            await context.bot.send_message(chat_id=chat_id, text=message)
+        self.application.job_queue.run_once(job, 0)
 
 
     async def _msghandle(self, update, context):
@@ -125,8 +127,8 @@ class TelegramBot:
         if not chat_id:
             chat_id = self.chat_ids[0]
 
-        def send_msg():
-            self._send_message(self.chat_ids[0], message)
+        async def send_msg():
+            await self._send_message(self.chat_ids[0], message)
 
         await self._single_do(send_msg)
 
@@ -136,7 +138,7 @@ class TelegramBot:
         '''starts the bot, then calls a function, then stops the bot'''
         await self.application.initialize()
         await self.application.start()
-        function()
+        await function()
         await self.application.stop()
         await self.application.shutdown()
 
