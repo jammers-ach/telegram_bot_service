@@ -23,10 +23,12 @@ class EchoBot(TelegramBot):
     name = "EchoBot"
 
     thinking_text = "Let me just process.."
+    wait_time = 3 #seconds
 
     async def handle_update(self, update):
         await update.message.reply_text(self.thinking_text)
-        await asyncio.sleep(1)
+        await self.typing(update)
+        await asyncio.sleep(self.wait_time)
         await update.message.reply_text(f"You said: {update.message.text}")
 
 

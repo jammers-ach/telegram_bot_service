@@ -101,6 +101,7 @@ class BirthdayBot(TelegramBot):
 
     @TelegramBot.command
     async def all(self, update):
+        self.typing(update)
         birthdays = self._filter_birthdays(lambda x: True)
 
         msg = "\n".join([f'{b["DOB"]}, {b["Who"]}' for b in birthdays])

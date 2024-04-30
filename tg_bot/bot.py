@@ -4,12 +4,14 @@ import logging
 import asyncio
 
 from telegram import ForceReply, Update
+from telegram.constants import ChatAction
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 logger = logging.getLogger(__name__)
 
 class TelegramBot:
 
+    # Set to true if only authorized chats can talk
     only_authorized = True
     command_registry = []
 
@@ -114,8 +116,6 @@ class TelegramBot:
         if self.only_authorized:
             if update.message.chat_id not in self.chat_ids:
                 raise PermissionError(f"{update.message.chat_id} not in authorised chat list")
-        else:
-            return False
 
 
     async def single_send_msg(self, message, chat_id=None):
@@ -141,6 +141,9 @@ class TelegramBot:
         await self.application.shutdown()
 
 
-
+    async def typing(self, update):
+        '''sets the status to `typing`'''
+        chat_id = update.message.chat_id
+        await self.application.bot.send_chat_action(chat_id, ChatAction.TYPING)
 
 
