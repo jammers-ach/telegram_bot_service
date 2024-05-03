@@ -169,7 +169,7 @@ class BirthdayBot(TelegramBot):
         return '\n'.join(message)
 
     async def todays(self):
-        msg = self.make_birthday_msg(0)
+        msg = self.make_birthday_msg(1)
         if msg:
             await self.single_send_msg(msg, chat_ids=self.chat_ids)
         else:
