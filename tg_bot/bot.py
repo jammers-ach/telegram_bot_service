@@ -39,12 +39,16 @@ class TelegramBot:
         self.commands = []
 
 
+    @property
+    def config_dir(self):
+        return os.path.expanduser(f"~/.config/tgbot-{self.name.lower()}")
+
+
     def load_config(self):
         '''loads the bots config from ~/.config/tgbot-{botname}/config
 
         the config file is a simple text file with key=value'''
-        config_dir = os.path.expanduser(f"~/.config/tgbot-{self.name.lower()}")
-        config_file = os.path.join(config_dir, "config")
+        config_file = os.path.join(self.config_dir, "config")
 
         if not os.path.exists(config_file):
             raise FileNotFoundError(f"Config file not found: {config_file}")
