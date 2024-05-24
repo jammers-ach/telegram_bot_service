@@ -39,11 +39,36 @@ import logging
 import asyncio
 import datetime
 import json
+import tempfile
+
+import matplotlib.dates as md
+import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw, ImageFont
+from matplotlib.ticker import AutoMinorLocator, AutoLocator
 
 from tg_bot.bot  import TelegramBot
 
 logger = logging.getLogger(__name__)
 
+
+def plot_measurements(dates, values, title, ylab='Value'):
+    # Convert the list of dates from seconds since epoch to datetime objects
+    dates = [datetime.datetime.fromtimestamp(ts) for ts in dates]
+
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(dates, values, marker='o', linestyle='-')
+
+    ax.set_xlabel('Date')
+    ax.set_ylabel(ylab)
+    ax.set_title(title)
+    ax.grid(True)
+    fig.tight_layout()
+
+    # Rotating the date labels for better readability
+    fig.autofmt_xdate()
+
+    return fig, ax
 
 class MeasureBot(TelegramBot):
     '''Telegram Bot which stores time series data from conversations'''
@@ -66,6 +91,27 @@ class MeasureBot(TelegramBot):
                 json.dump(self.db, f, indent=2)
 
 
+    def _db_get(self, chat_id, key):
+        chat_id = str(chat_id)
+        if chat_id not in self.db:
+            self.db[chat_id] = {}
+        return self.db[chat_id][key]
+
+    def _db_put(self, chat_id, key, record):
+        chat_id = str(chat_id)
+        if chat_id not in self.db:
+            self.db[chat_id] = {}
+
+        if key not in self.db[chat_id]:
+            self.db[chat_id][key] = {"data":[], "type":"ts"}
+
+        date, value = record
+
+        self.db[chat_id][key]["data"].append((date, value))
+        self.states[chat_id] = 0
+
+        self._save_db()
+
 
 
     @TelegramBot.command
@@ -82,15 +128,44 @@ class MeasureBot(TelegramBot):
     @TelegramBot.command
     async def list(self, update):
 
-        key = update.message.text.split(" ", 1)[1].strip()
+        try:
+            key = update.message.text.split(" ", 1)[1].strip()
+        except IndexError:
+            await update.message.reply_text("please specify a key")
+            return
+
         chat_id = str(update.message.chat_id)
 
-        if chat_id not in self.db or key not in self.db[chat_id]:
-            await update.message.reply_text(f"No data for {key}")
-            return
-        else:
-            text = [f"{key}: {value}" for key,value in self.db[chat_id][key]["data"]]
+        try:
+            data = self._db_get(chat_id, key)["data"]
+            text = [f"{key}: {value}" for key,value in data]
             await update.message.reply_text("\n".join(text))
+        except KeyError:
+            await update.message.reply_text(f"{key} not found in database")
+
+    @TelegramBot.command
+    async def graph(self, update):
+        try:
+            key = update.message.text.split(" ", 1)[1].strip()
+        except IndexError:
+            await update.message.reply_text("please specify a key")
+            return
+
+        chat_id = str(update.message.chat_id)
+
+        try:
+            data = self._db_get(chat_id, key)["data"]
+            ts, val = zip(*data)
+            fig, ax = plot_measurements(ts, val, key)
+
+            with tempfile.NamedTemporaryFile() as fp:
+                fig.savefig(fp, format="png")
+                fp.seek(0)
+                await update.message.reply_photo(fp)
+
+
+        except KeyError:
+            await update.message.reply_text(f"{key} not found in database")
 
 
     async def handle_update(self, update):
@@ -112,18 +187,14 @@ class MeasureBot(TelegramBot):
             value = self.last_value
             date = self.last_date
             key = text
-            await update.message.reply_text(f"Added: {key}: {date}, {value}")
+            try:
+                self._db_put(chat_id, key, (date.timestamp(), value))
+                await update.message.reply_text(f"Added: {key}: {date}, {value}")
+            except Exception as e:
+                await update.message.reply_text(f"Failed to add to database")
+                raise e
 
-            if chat_id not in self.db:
-                self.db[chat_id] = {}
 
-            if key not in self.db[chat_id]:
-                self.db[chat_id][key] = {"data":[], "type":"ts"}
-
-            self.db[chat_id][key]["data"].append((date.timestamp(), value))
-            self.states[chat_id] = 0
-
-            self._save_db()
 
 
 
