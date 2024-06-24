@@ -129,7 +129,7 @@ class MeasureBot(TelegramBot):
     async def list(self, update):
 
         try:
-            key = update.message.text.split(" ", 1)[1].strip()
+            key = update.message.text.split(" ", 1)[1].strip().lower()
         except IndexError:
             await update.message.reply_text("please specify a key")
             return
@@ -146,7 +146,7 @@ class MeasureBot(TelegramBot):
     @TelegramBot.command
     async def graph(self, update):
         try:
-            key = update.message.text.split(" ", 1)[1].strip()
+            key = update.message.text.split(" ", 1)[1].strip().lower()
         except IndexError:
             await update.message.reply_text("please specify a key")
             return
@@ -186,15 +186,13 @@ class MeasureBot(TelegramBot):
         elif state == 1:
             value = self.last_value
             date = self.last_date
-            key = text
+            key = text.lower()
             try:
                 self._db_put(chat_id, key, (date.timestamp(), value))
                 await update.message.reply_text(f"Added: {key}: {date}, {value}")
             except Exception as e:
                 await update.message.reply_text(f"Failed to add to database")
                 raise e
-
-
 
 
 
