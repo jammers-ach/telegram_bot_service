@@ -206,5 +206,8 @@ def run():
     bot.start()
 
 if __name__ == '__main__':
+
     logging.basicConfig(level=logging.INFO)
+    logging.getLogger('requests').setLevel(logging.WARNING)
+    logging.getLogger('httpx').setLevel(logging.WARNING)
     run()
