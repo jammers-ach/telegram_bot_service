@@ -78,14 +78,29 @@ class ColorDayBot(TelegramBot):
         if text.lower().startswith("why"):
             text = text[4::]
             await update.message.reply_text(f"You why: {text}")
+            try:
+                self.why_square(datetime.date.today(), text)
+                await update.message.reply_text(f"Updated {datetime.date.today()} with {text}")
+            except Exception as e:
+                await update.message.reply_text(f"failed: {e}")
         else:
             text = text.lower()
+            if text not in colors:
+                await update.message.reply_text(f"Invalid color {text}")
+                color_list = "\n".join(colors.keys())
+                await update.message.reply_text(f"Possible colors are: {color_list}")
+                return
+
             try:
                 self.color_square(datetime.date.today(), text)
                 await update.message.reply_text(f"Updated {datetime.date.today()} with {text}")
             except Exception as e:
                 await update.message.reply_text(f"failed: {e}")
 
+    def why_square(self, date, whys):
+        row, col = week_and_day(date)
+        cell = self.whys.cell(row, col).address
+        self.whys.update(cell, whys)
 
 
     def color_square(self, date, color):
@@ -93,7 +108,7 @@ class ColorDayBot(TelegramBot):
         cell = self.emotions.cell(row, col).address
         logger.info(f"for {date} got ({row}, {col}), cell {cell}")
 
-        r,g,b = colors.get(color, (1,1,1))
+        r,g,b = colors[color]
 
         self.emotions.format(cell, {
             "backgroundColor":{
