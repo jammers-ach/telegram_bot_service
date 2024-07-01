@@ -42,7 +42,7 @@ from tg_bot.bot  import TelegramBot
 logger = logging.getLogger(__name__)
 
 # The week and day of a given date
-week_and_day = lambda x: (x.isocalendar()[1], x.weekday())
+week_and_day = lambda x: (x.isocalendar()[1], x.weekday()+1)
 
 
 rgb = lambda r, g, b: (r/255, g/255, b/255)
