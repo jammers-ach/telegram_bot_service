@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 '''
-BirthdayBot: A telegram bot that reads birthdays from a google sheet.
+ColorBot: A bot that will ask you for a color
 
 It include command line options to tell you if there are any birthdays in
 the next few days. These can be added to your crontab on your server.
@@ -31,7 +31,6 @@ sheet_url=<SHEET_URL_FOR_SERVICE_ACCOUNT>
 
 '''
 import argparse
-import os
 import logging
 import asyncio
 import gspread
@@ -72,14 +71,12 @@ class ColorDayBot(TelegramBot):
         self.log = self.sheet.get_worksheet(2)
 
 
-    async def handle_update(self, update):
-        text = update.message.text
-
+    async def make_update(self, update, text, date):
         if text.lower().startswith("why"):
             text = text[4::]
             await update.message.reply_text(f"You why: {text}")
             try:
-                self.why_square(datetime.date.today(), text)
+                self.why_square(date, text)
                 await update.message.reply_text(f"Updated {datetime.date.today()} with {text}")
             except Exception as e:
                 await update.message.reply_text(f"failed: {e}")
@@ -92,10 +89,15 @@ class ColorDayBot(TelegramBot):
                 return
 
             try:
-                self.color_square(datetime.date.today(), text)
+                self.color_square(date, text)
                 await update.message.reply_text(f"Updated {datetime.date.today()} with {text}")
             except Exception as e:
                 await update.message.reply_text(f"failed: {e}")
+
+    async def handle_update(self, update):
+        text = update.message.text
+        self.make_update(update, text, datetime.date.today())
+
 
     def why_square(self, date, whys):
         row, col = week_and_day(date)
@@ -119,6 +121,10 @@ class ColorDayBot(TelegramBot):
         })
         self.emotions.update(cell, 'x')
 
+    @TelegramBot.command
+    async def yesterday(self, update):
+        text = update.message.text
+        self.make_update(update, text, datetime.date.today() - datetime.timedelta(days=1))
 
     @TelegramBot.command
     async def help(self, update):
