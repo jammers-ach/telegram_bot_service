@@ -84,6 +84,7 @@ class TelegramBot:
 
         # add handler for non command messages
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._msghandle))
+        self.application.add_handler(MessageHandler(filters.VOICE, self._voicehandle))
 
     def start(self):
         logger.info("starting bot")
@@ -111,12 +112,28 @@ class TelegramBot:
         logger.info("Got message: %s", update.message.text)
         await self.handle_update(update)
 
+    async def _voicehandle(self, update, context):
+        self._authorized_check(update)
+        logger.info("Got voice: %s", update.message.text)
+        try:
+            await self.handle_voice(update)
+        except NotImplementedError as e:
+            await update.message.reply_text("This bot cannot process voice")
+
     async def handle_update(self, update):
         '''handles an update (i.e. a new message) coming into the bot
 
         '''
         raise NotImplementedError("Bot implement handle_update")
 
+    async def handle_voice(self, update):
+        '''handles an voice message coming into the bot
+
+        the file can be downloaded like this
+        new_file = await update.message.effective_attachment.get_file()
+        await new_file.download_to_drive('/tmp/foo.ogg')
+        '''
+        raise NotImplementedError("Bot implement handle_voice")
 
     def _authorized_check(self, update):
         if self.only_authorized:
