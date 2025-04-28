@@ -4,7 +4,7 @@ import logging
 import asyncio
 
 from telegram import ForceReply, Update
-from telegram.constants import ChatAction
+from telegram.constants import ChatAction, ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 logger = logging.getLogger(__name__)
@@ -99,11 +99,15 @@ class TelegramBot:
         '''called when this bot has just started up'''
         await self._send_message(self.chat_ids[0], f"{self.name} is starting up")
 
-    async def _send_message(self, chat_id, message):
+    async def _send_message(self, chat_id, message, markdown=False):
         '''Sends :message: to :chat_id:'''
         assert chat_id in self.chat_ids, "unauthorised chat id"
         async def job(context):
-            await context.bot.send_message(chat_id=chat_id, text=message)
+            if markdown:
+                await context.bot.send_message(chat_id=chat_id, text=message, parse_mode=ParseMode.MARKDOWN)
+            else:
+                await context.bot.send_message(chat_id=chat_id, text=message)
+
         self.application.job_queue.run_once(job, 0)
 
 
@@ -141,7 +145,7 @@ class TelegramBot:
                 raise PermissionError(f"{update.message.chat_id} not in authorised chat list")
 
 
-    async def single_send_msg(self, message, chat_ids=None):
+    async def single_send_msg(self, message, chat_ids=None, markdown=False):
         '''starts the bot, sends a sync message to the first contact in the list
         or a list of contacts
 
@@ -151,7 +155,7 @@ class TelegramBot:
 
         async def send_msg():
             for chat_id in chat_ids:
-                await self._send_message(chat_id, message)
+                await self._send_message(chat_id, message, markdown=markdown)
 
         await self._single_do(send_msg)
 

@@ -113,7 +113,7 @@ class FoodBot(TelegramBot):
             return
         else:
             keys = self.db[chat_id].get(day,[])
-            await update.message.reply_text(keys)
+            await update.message.reply_markdown(print_day(keys))
 
     @TelegramBot.command
     async def log(self, update):
@@ -143,8 +143,23 @@ class FoodBot(TelegramBot):
         """prints out today's food"""
         date = datetime.datetime.today()
         day = date.strftime("%Y-%m-%d")
-        keys = self.db[str(self.chat_ids[0])].get(day,[])
-        await self.single_send_msg(f"Today you ate: {keys}", chat_ids=self.chat_ids)
+        keys = self.db[str(self.chat_ids[0])].get(day,None)
+        if keys:
+            await self.single_send_msg("Today you ate:", chat_ids=self.chat_ids)
+            await self.single_send_msg(self.print_day(keys), chat_ids=self.chat_ids, markdown=True)
+        else:
+            await self.single_send_msg("Today you ate nothing!?!", chat_ids=self.chat_ids)
+            await self.single_send_msg("maybe you should correct that?", chat_ids=self.chat_ids)
+
+
+    def print_day(self, day):
+        text = ""
+        day.sort(key=lambda x: x[0])
+        for time, item in day:
+            text += f"`{time}`: *{item}*\n"
+
+        return text
+
 
 
 def run():
