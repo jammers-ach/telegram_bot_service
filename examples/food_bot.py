@@ -96,17 +96,16 @@ class FoodBot(TelegramBot):
     async def day(self, update):
         text = update.message.text
         if text == '/day':
-            await self.day(update, datetime.datetime.now())
+            await self.post_day(update, datetime.datetime.now())
         else:
             try:
-
                 text = update.message.text.split(" ", 1)[1].strip().lower()
                 date = datetime.datetime.strptime(text, "%Y-%m-%d")
-                await self.day(update, date)
+                await self.post_day(update, date)
             except Exception as e:
                 await update.message.reply_text(str(e))
 
-    async def day(self, update, date):
+    async def post_day(self, update, date):
         day = date.strftime("%Y-%m-%d")
         chat_id = str(update.message.chat_id)
         if chat_id not in self.db:
@@ -115,6 +114,16 @@ class FoodBot(TelegramBot):
         else:
             keys = self.db[chat_id].get(day,[])
             await update.message.reply_text(keys)
+
+    @TelegramBot.command
+    async def log(self, update):
+        try:
+            time = update.message.text.split(" ", 2)[1].strip().lower()
+            item = update.message.text.split(" ", 2)[2].strip().lower()
+            dt = datetime.datetime.combine(datetime.datetime.today().date(), datetime.datetime.strptime(time, "%H:%M").time())
+            await self.log_date(update, item, dt)
+        except Exception as e:
+            await update.message.reply_text(str(e))
 
     async def handle_update(self, update):
         item = update.message.text
