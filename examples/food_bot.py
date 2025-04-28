@@ -113,7 +113,7 @@ class FoodBot(TelegramBot):
             return
         else:
             keys = self.db[chat_id].get(day,[])
-            await update.message.reply_markdown(print_day(keys))
+            await update.message.reply_markdown(self.print_day(keys))
 
     @TelegramBot.command
     async def log(self, update):
