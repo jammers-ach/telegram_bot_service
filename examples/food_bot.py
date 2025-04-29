@@ -32,8 +32,6 @@ import logging
 import asyncio
 import datetime
 import json
-import tempfile
-
 
 from tg_bot.bot  import TelegramBot
 
@@ -66,9 +64,15 @@ class FoodBot(TelegramBot):
     def _save_shortcut(self, chatid, key, item):
         if chatid not in self.shortcuts:
             self.shortcuts[chatid] = {}
+        key = key.lower()
         self.shortcuts[chatid][key] = item
         with open(self.shortcut_db, "w") as f:
             json.dump(self.shortcuts, f, indent=2)
+
+    def _get_shortcut(self, chatid, key):
+        if chatid not in self.shortcuts:
+            return key
+        return self.shortcuts[chatid].get(key.lower(), key)
 
     def _save_db(self):
         with open(self.db_file, "w") as f:
@@ -171,10 +175,7 @@ class FoodBot(TelegramBot):
         day = date.strftime("%Y-%m-%d")
         time = date.strftime("%H:%M")
 
-        if chat_id in self.shortcuts:
-            item = self.shortcuts[chat_id].get(item,item)
-
-
+        item = self._get_shortcut(chat_id, item)
         self._db_put(chat_id, day, (time, item))
         await update.message.reply_markdown(f"{day}: *{item}* at `{time}`")
 
