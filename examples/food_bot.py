@@ -48,13 +48,27 @@ class FoodBot(TelegramBot):
     def __init__(self):
         super().__init__()
         self.db_file = os.path.join(self.config_dir, "database")
+        self.shortcut_db = os.path.join(self.config_dir, "shortcuts")
 
         if os.path.exists(self.db_file):
             with open(self.db_file) as f:
                 self.db = json.load(f)
         else:
             self.db = {}
+
+        if os.path.exists(self.shortcut_db):
+            with open(self.shortcut_db) as f:
+                self.shortcuts = json.load(f)
+        else:
+            self.shortcuts = {}
         self.states = {}
+
+    def _save_shortcut(self, chatid, key, item):
+        if chatid not in self.shortcuts:
+            self.shortcuts[chatid] = {}
+        self.shortcuts[chatid][key] = item
+        with open(self.shortcut_db, "w") as f:
+            json.dump(self.shortcuts, f, indent=2)
 
     def _save_db(self):
         with open(self.db_file, "w") as f:
@@ -88,8 +102,30 @@ class FoodBot(TelegramBot):
 /day <date> display what you ate this day, or a specified day
 /log <time> <food>: log some food you ate at a specific time, that you might have forgotten about
 /day <datE> display what you ate on that date
+/shortcut <key> <full text> adds a shortcut
 '''
         await update.message.reply_text(helptext)
+
+
+
+    @TelegramBot.command
+    async def shortcut(self, update):
+        text = update.message.text
+        chat_id = str(update.message.chat_id)
+        if text == "/shortcut":
+            t = ""
+            if chat_id not in self.shortcuts:
+                await update.message.reply_text("you have no shortcuts")
+                return
+            for key,value in self.shortcuts[chat_id].items():
+                t += f"`{key}`: {value}\n"
+            await update.message.reply_markdown(t)
+        else:
+            key = update.message.text.split(" ", 2)[1].strip().lower()
+            value = update.message.text.split(" ", 2)[2].strip().lower()
+            self._save_shortcut(chat_id, key, value)
+            await update.message.reply_markdown(f"saved: `{key}`: {value}\n")
+
 
 
     @TelegramBot.command
@@ -134,6 +170,11 @@ class FoodBot(TelegramBot):
         chat_id = str(update.message.chat_id)
         day = date.strftime("%Y-%m-%d")
         time = date.strftime("%H:%M")
+
+        if chat_id in self.shortcuts:
+            item = self.shortcuts[chat_id].get(item,item)
+
+
         self._db_put(chat_id, day, (time, item))
         await update.message.reply_markdown(f"{day}: *{item}* at `{time}`")
 
