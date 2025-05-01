@@ -78,7 +78,7 @@ class ColorDayBot(TelegramBot):
             await update.message.reply_text(f"You why: {text}")
             try:
                 self.why_square(date, text)
-                await update.message.reply_text(f"Updated {datetime.date.today()} with {text}")
+                await update.message.reply_text(f"Updated {date} with {text}")
             except Exception as e:
                 await update.message.reply_text(f"failed: {e}")
         else:
@@ -91,13 +91,13 @@ class ColorDayBot(TelegramBot):
 
             try:
                 self.color_square(date, text)
-                await update.message.reply_text(f"Updated {datetime.date.today()} with {text}")
+                await update.message.reply_text(f"Updated {date} with {text}")
             except Exception as e:
                 await update.message.reply_text(f"failed: {e}")
 
     async def handle_update(self, update):
         text = update.message.text
-        self.make_update(update, text, datetime.date.today())
+        await self.make_update(update, text, datetime.date.today())
 
 
     def why_square(self, date, whys):
@@ -125,7 +125,7 @@ class ColorDayBot(TelegramBot):
     @TelegramBot.command(args="<NEW MSG>")
     async def yesterday(self, update):
         '''update yesterdays message (incase you forgot)'''
-        text = update.message.text
+        text = update.message.text.replace("/yesterday","").strip()
         self.make_update(update, text, datetime.date.today() - datetime.timedelta(days=1))
 
     @TelegramBot.command
