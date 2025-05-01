@@ -108,6 +108,12 @@ class TelegramBot:
             logger.info("Found command %s", command.__name__)
             self.application.add_handler(CommandHandler(command.__name__, call(command)))
 
+        async def start(update, context):
+            await self.help(update)
+        self.application.add_handler(CommandHandler("start", start))
+
+
+
 
         # add handler for non command messages
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._msghandle))
