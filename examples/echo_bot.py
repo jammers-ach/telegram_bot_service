@@ -12,15 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 class EchoBot(TelegramBot):
-    '''Simple telegram bot that echos what you've just said,
-
-    after it thinks for a bit.
-
-    It has two commands:
-
-        /help to display help text
-        /change <new text> to change the thinking text'''
+    '''Simple telegram bot that echos what you've just said'''
     name = "EchoBot"
+    description = """Simple telegram bot that echos what you've just said
+after it thinks for a bit"""
 
     thinking_text = "Let me just process.."
     wait_time = 3 #seconds
@@ -32,26 +27,17 @@ class EchoBot(TelegramBot):
         await update.message.reply_text(f"You said: {update.message.text}")
 
 
-    @TelegramBot.command
-    async def help(self, update):
-
-        helptext='''Simple telegram bot that echos what you've just said,
-
-    after it thinks for a bit.
-
-    It has two commands:
-
-        /help to display help text
-        /change <new text> to change the thinking text'''
-        await update.message.reply_text(helptext)
-
-    @TelegramBot.command
+    @TelegramBot.command(args="<NEW STRING>")
     async def change(self, update):
+        """change the input string"""
         self.thinking_text = update.message.text.replace("/change ","")
         await update.message.reply_text(f"Ok I will now set the thinking text to: {self.thinking_text}")
 
 
-
+    @TelegramBot.command
+    async def send_image(self, update):
+        """sends an exmaple image"""
+        await update.message.reply_markdown("`Not implemented`")
 
 
 def run():

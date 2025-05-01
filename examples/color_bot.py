@@ -58,6 +58,7 @@ colors = {
 class ColorDayBot(TelegramBot):
     '''Telegram bot which colors in your mood for the day'''
     name = "ColorDayBot"
+    description = "Bot which colors in your mood for the day in a google sheet"
 
     def __init__(self):
         super().__init__()
@@ -121,8 +122,9 @@ class ColorDayBot(TelegramBot):
         })
         self.emotions.update(cell, 'x')
 
-    @TelegramBot.command
+    @TelegramBot.command(args="<NEW MSG>")
     async def yesterday(self, update):
+        '''update yesterdays message (incase you forgot)'''
         text = update.message.text
         self.make_update(update, text, datetime.date.today() - datetime.timedelta(days=1))
 

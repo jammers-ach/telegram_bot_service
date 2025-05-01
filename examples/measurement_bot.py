@@ -73,6 +73,7 @@ def plot_measurements(dates, values, title, ylab='Value'):
 class MeasureBot(TelegramBot):
     '''Telegram Bot which stores time series data from conversations'''
     name = "MeasureBot"
+    description = "Bot which stores time series data from conversations"
 
 
     def __init__(self):
@@ -116,6 +117,7 @@ class MeasureBot(TelegramBot):
 
     @TelegramBot.command
     async def keys(self, update):
+        """Displays all the keys that we have"""
         chat_id = str(update.message.chat_id)
         if chat_id not in self.db:
             await update.message.reply_text("No data yet")
@@ -125,8 +127,10 @@ class MeasureBot(TelegramBot):
             await update.message.reply_text(keys)
 
 
-    @TelegramBot.command
+    @TelegramBot.command(args="<KEY>")
     async def list(self, update):
+        """Lists the data for a specific key"""
+
 
         try:
             key = update.message.text.split(" ", 1)[1].strip().lower()

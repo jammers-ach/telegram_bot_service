@@ -64,6 +64,7 @@ def day_delta(d1, d2):
 class BirthdayBot(TelegramBot):
     '''Telegram bot which reads in birthdays from a google sheet'''
     name = "BirthdayBot"
+    description = "Telegram bot which reads in birthdays from a google sheet"
     norm_msg="{day}.{month} {dow} - {name}"
     present_msg="{day}.{month} {dow} - {name}, {present} maybe?"
 
@@ -101,6 +102,7 @@ class BirthdayBot(TelegramBot):
 
     @TelegramBot.command
     async def all(self, update):
+        """List all the birthdays"""
         self.typing(update)
         birthdays = self._filter_birthdays(lambda x: True)
 
@@ -108,17 +110,9 @@ class BirthdayBot(TelegramBot):
         await update.message.reply_text(msg)
 
 
-    @TelegramBot.command
-    async def help(self, update):
-        msg = '''
-        /all to see a list of all the birthdays
-        /days <days> to see whos birthday it is in the next X days
-        '''
-        await update.message.reply_text(msg)
-
-
-    @TelegramBot.command
+    @TelegramBot.command(args="<days>")
     async def days(self, update):
+        """List all the birthdays for the next N days"""
         try:
             text = update.message.text.split(" ", 1)[1].strip()
 

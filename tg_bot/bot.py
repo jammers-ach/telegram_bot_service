@@ -2,6 +2,7 @@ import argparse
 import os
 import logging
 import asyncio
+import functools
 
 from telegram import ForceReply, Update
 from telegram.constants import ChatAction, ParseMode
@@ -14,16 +15,41 @@ class TelegramBot:
     # Set to true if only authorized chats can talk
     only_authorized = True
     command_registry = []
+    command_usage = []
 
     @classmethod
-    def command(cls, foo):
-        '''decorator to indicate this a command'''
-        cls.command_registry.append(foo)
-        return foo
+    def command(cls, f_py=None, args=""):
+        """Marks a method as having a command, so it can be called with /foo
+
+        docstring gets added to the bots /help string, args in the decorator
+        can be used to determine the helpstring:
+
+        for example:
+        @TelegramBot.command(args="<BAR>")
+        async def foo(self, update):
+            '''foos the bar'''
+            bar = update.message.text
+            await update.message.reply_text(f"Ok, I'm fooing your {bar}")
+
+        """
+        print(f"command registered {f_py}: {args}")
+        assert callable(f_py) or f_py is None
+        def _decorator(func):
+            cls.command_registry.append(func)
+            cls.command_usage.append(f"`{func.__name__} {args}` {func.__doc__}")
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+        return _decorator(f_py) if callable(f_py) else _decorator
+
 
     def __init__(self):
         if not hasattr(self, 'name'):
             raise NotImplementedError("Bot must have a name")
+
+        if not hasattr(self, 'description'):
+            raise NotImplementedError("Bot must have a description")
 
         self.config = {}
         self.load_config()
@@ -37,7 +63,6 @@ class TelegramBot:
         self._bot_init()
 
         self.commands = []
-
 
     @property
     def config_dir(self):
@@ -74,6 +99,7 @@ class TelegramBot:
             async def msg(update, context):
                 # for some reason we're not propogating the message context
                 # for now
+                self._lastupdate = update # memoize the last update
                 await foo(self, update)
 
             return msg
@@ -81,6 +107,7 @@ class TelegramBot:
         for command in self.command_registry:
             logger.info("Found command %s", command.__name__)
             self.application.add_handler(CommandHandler(command.__name__, call(command)))
+
 
         # add handler for non command messages
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._msghandle))
@@ -90,6 +117,18 @@ class TelegramBot:
         logger.info("starting bot")
         self.application.post_init = self.__post_startup
         self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+
+    async def help(self, update):
+        """Prints out the helptext"""
+
+        helptext = f"{self.name}\n\n"
+        helptext += self.description
+        helptext += "\n\n"
+
+        helptext += "\n".join(self.command_usage)
+        await update.message.reply_markdown(helptext)
+
 
 
     async def __post_startup(self, _):
@@ -177,3 +216,5 @@ class TelegramBot:
         await self.application.bot.send_chat_action(chat_id, ChatAction.TYPING)
 
 
+# hack because we want the help method to be a command.
+TelegramBot.help = TelegramBot.command(TelegramBot.help)
