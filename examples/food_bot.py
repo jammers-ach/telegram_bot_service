@@ -115,6 +115,7 @@ class FoodBot(TelegramBot):
 
     @TelegramBot.command
     async def shortcut(self, update):
+        '''Creates a new shortcut, or displays all the shortcuts'''
         text = update.message.text
         chat_id = str(update.message.chat_id)
         if text == "/shortcut":
@@ -132,6 +133,7 @@ class FoodBot(TelegramBot):
             await update.message.reply_markdown(f"saved: `{key}`: {value}\n")
 
     def _from_humandate(self, text):
+        '''Turns days of week into a certain date, or parases the date as YYYY-mm-dd'''
         text = text.lower()
         day_num = {'monday':0,'tuesday':1,'wednesday':2,'thursday':3,'friday':4,'saturday':5,'sunday':6}
         if text in day_num:
@@ -151,6 +153,7 @@ class FoodBot(TelegramBot):
 
     @TelegramBot.command
     async def day(self, update):
+        '''Print out what was eaten today or on a specific date'''
         text = update.message.text
         if text == '/day':
             await self.post_day(update, datetime.datetime.now())
@@ -174,7 +177,7 @@ class FoodBot(TelegramBot):
                 await update.message.reply_markdown(f"You are nothing on {day}")
                 return
 
-            await update.message.reply_markdown(self.print_day(keys))
+            await update.message.reply_markdown(self.generate_day(keys))
 
     @TelegramBot.command
     async def log(self, update):
@@ -190,12 +193,7 @@ class FoodBot(TelegramBot):
     @TelegramBot.command
     async def stats(self, update):
         chat_id = update.message.chat_id
-        msg = self.generate_top_list(chat_id)
-        await update.message.reply_markdown("In the last 7 days you ate:")
-        await update.message.reply_markdown(msg)
-        msg = self.generate_new_food(chat_id)
-        await update.message.reply_markdown("New foods for you in the last 7 days:")
-        await update.message.reply_markdown(msg)
+        await self._send_weekly_stats(chat_id, update)
 
 
     async def handle_update(self, update):
@@ -213,7 +211,8 @@ class FoodBot(TelegramBot):
         await update.message.reply_markdown(f"{day}: *{item}* at `{time}`")
 
 
-    def print_day(self, day):
+    def generate_day(self, day):
+        '''generates the list of things eaten in a day'''
         text = ""
         day.sort(key=lambda x: x[0])
         for time, item in day:
@@ -248,40 +247,38 @@ class FoodBot(TelegramBot):
         return text
 
     def generate_new_food(self, chat_id, days=7):
-        '''
-        prints out which foods were new for you in the last N days
+        '''prints out which foods were new for you in the last N days
         '''
         dates = [(datetime.datetime.today() - datetime.timedelta(days=i)).date().isoformat() for i in range(days-1, -1, -1)]
         db = self.db[str(chat_id)]
-        other_foods = []
-        weeks_foods = []
         other_foods, weeks_foods = [], []
         for key, items in db.items():
             (other_foods if key not in dates else weeks_foods).extend(food for _, food in items)
-
-        other_foods = set(other_foods)
-        weeks_foods = set(weeks_foods)
-        new_foods = (weeks_foods - other_foods)
-
-        msg = ""
-        for food in new_foods:
-            msg += f"{food}\n"
-        return msg
+        new_foods = set(weeks_foods) - set(other_foods)
+        return "\n".join(new_foods)
 
 
     async def weekly_stats(self):
         """Gives the weekly stats"""
         for chat_id in self.chat_ids:
-            await self._weekly_stats(chat_id)
+            await self._send_weekly_stats(chat_id)
 
-    async def _weekly_stats(self, chat_id):
+    async def _send_weekly_stats(self, chat_id, update=None):
         msg = self.generate_top_list(chat_id)
-        await self.single_send_msg("In the last 7 days you ate:", chat_ids=[chat_id], markdown=True)
-        await self.single_send_msg(msg, chat_ids=[chat_id], markdown=True)
+        if not update:
+            await self.single_send_msg("In the last 7 days you ate:", chat_ids=[chat_id], markdown=True)
+            await self.single_send_msg(msg, chat_ids=[chat_id], markdown=True)
+        else:
+            await update.message.reply_markdown("In the last 7 days you ate:")
+            await update.message.reply_markdown(msg)
 
         msg = self.generate_new_food(chat_id)
-        await self.single_send_msg("New foods for you in the last 7 days:", chat_ids=[chat_id], markdown=True)
-        await self.single_send_msg(msg, chat_ids=[chat_id], markdown=True)
+        if not update:
+            await self.single_send_msg("New foods for you in the last 7 days:", chat_ids=[chat_id], markdown=True)
+            await self.single_send_msg(msg, chat_ids=[chat_id], markdown=True)
+        else:
+            await update.message.reply_markdown("New foods for you in the last 7 days:")
+            await update.message.reply_markdown(msg)
 
     async def today(self):
         """prints out today's food"""
@@ -290,10 +287,9 @@ class FoodBot(TelegramBot):
         for chat_id in self.chat_ids:
             try:
                 keys = self.db[str(chat_id)].get(day,None)
-                print(chat_id)
                 if keys:
                     await self.single_send_msg("Today you ate:", chat_ids=[chat_id,])
-                    await self.single_send_msg(self.print_day(keys), chat_ids=[chat_id,], markdown=True)
+                    await self.single_send_msg(self.generate_day(keys), chat_ids=[chat_id,], markdown=True)
                 else:
                     await self.single_send_msg("Today you ate nothing!?!", chat_ids=[chat_id,])
                     await self.single_send_msg("maybe you should correct that?", chat_ids=[chat_id,])
