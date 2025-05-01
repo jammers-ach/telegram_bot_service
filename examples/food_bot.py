@@ -107,6 +107,7 @@ class FoodBot(TelegramBot):
 /log <time> <food>: log some food you ate at a specific time, that you might have forgotten about
 /day <datE> display what you ate on that date
 /shortcut <key> <full text> adds a shortcut
+/yesterday show what you ate yesterday
 '''
         await update.message.reply_text(helptext)
 
@@ -130,6 +131,22 @@ class FoodBot(TelegramBot):
             self._save_shortcut(chat_id, key, value)
             await update.message.reply_markdown(f"saved: `{key}`: {value}\n")
 
+    def _from_humandate(self, text):
+        text = text.lower()
+        day_num = {'monday':0,'tuesday':1,'wednesday':2,'thursday':3,'friday':4,'saturday':5,'sunday':6}
+        if text in day_num:
+            today = datetime.datetime.today()
+            days_ago = (today.weekday() - day_num[text]) % 7 or 7
+            return (today - datetime.timedelta(days=days_ago)).date()
+        else:
+            date = datetime.datetime.strptime(text, "%Y-%m-%d")
+            return date
+
+    @TelegramBot.command
+    async def yesterday(self, update):
+        yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
+        await self.post_day(update, yesterday)
+
 
 
     @TelegramBot.command
@@ -140,7 +157,7 @@ class FoodBot(TelegramBot):
         else:
             try:
                 text = update.message.text.split(" ", 1)[1].strip().lower()
-                date = datetime.datetime.strptime(text, "%Y-%m-%d")
+                date = self._from_humandate(text)
                 await self.post_day(update, date)
             except Exception as e:
                 await update.message.reply_text(str(e))
@@ -153,6 +170,10 @@ class FoodBot(TelegramBot):
             return
         else:
             keys = self.db[chat_id].get(day,[])
+            if not keys:
+                await update.message.reply_markdown(f"You are nothing on {day}")
+                return
+
             await update.message.reply_markdown(self.print_day(keys))
 
     @TelegramBot.command
@@ -199,7 +220,6 @@ class FoodBot(TelegramBot):
         day.sort(key=lambda x: x[0])
         for time, item in day:
             text += f"`{time}`: *{item}*\n"
-
         return text
 
 
