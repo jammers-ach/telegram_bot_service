@@ -147,8 +147,9 @@ class MeasureBot(TelegramBot):
         except KeyError:
             await update.message.reply_text(f"{key} not found in database")
 
-    @TelegramBot.command
+    @TelegramBot.command(args="<KEY>")
     async def graph(self, update):
+        '''graphs a specific key'''
         try:
             key = update.message.text.split(" ", 1)[1].strip().lower()
         except IndexError:

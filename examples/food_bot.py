@@ -39,8 +39,9 @@ logger = logging.getLogger(__name__)
 
 
 class FoodBot(TelegramBot):
-    '''Telegram Bot which stores time series data from conversations'''
+    '''bot to track what you eat'''
     name = "FoodBot"
+    description = "bot to track what you eat"
 
 
     def __init__(self):
@@ -98,24 +99,10 @@ class FoodBot(TelegramBot):
 
         self._save_db()
 
-    @TelegramBot.command
-    async def help(self, update):
 
-        helptext='''Bot to log what food you eat:
-/help to display help text
-/day <date> display what you ate this day, or a specified day
-/log <time> <food>: log some food you ate at a specific time, that you might have forgotten about
-/day <datE> display what you ate on that date
-/shortcut <key> <full text> adds a shortcut
-/yesterday show what you ate yesterday
-'''
-        await update.message.reply_text(helptext)
-
-
-
-    @TelegramBot.command
+    @TelegramBot.command(args="<code> <full text>")
     async def shortcut(self, update):
-        '''Creates a new shortcut, or displays all the shortcuts'''
+        '''Creates a new shortcut from a code, or displays all the shortcuts'''
         text = update.message.text
         chat_id = str(update.message.chat_id)
         if text == "/shortcut":
@@ -146,14 +133,15 @@ class FoodBot(TelegramBot):
 
     @TelegramBot.command
     async def yesterday(self, update):
+        ''''''''
         yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
         await self.post_day(update, yesterday)
 
 
 
-    @TelegramBot.command
+    @TelegramBot.command(args="<day>")
     async def day(self, update):
-        '''Print out what was eaten today or on a specific date'''
+        '''Print out what was eaten today or on a specific date (e.g. monday, tuesday wednesday)'''
         text = update.message.text
         if text == '/day':
             await self.post_day(update, datetime.datetime.now())
@@ -179,8 +167,9 @@ class FoodBot(TelegramBot):
 
             await update.message.reply_markdown(self.generate_day(keys))
 
-    @TelegramBot.command
+    @TelegramBot.command(args="<time> <thing>")
     async def log(self, update):
+        '''logs something you ate at a specific time HH:MM incase you forgot'''
         try:
             time = update.message.text.split(" ", 2)[1].strip().lower()
             item = update.message.text.split(" ", 2)[2].strip().lower()
@@ -192,6 +181,7 @@ class FoodBot(TelegramBot):
 
     @TelegramBot.command
     async def stats(self, update):
+        '''top 10 popular food in the last 7 days, and new food in the last 7 days'''
         chat_id = update.message.chat_id
         await self._send_weekly_stats(chat_id, update)
 
