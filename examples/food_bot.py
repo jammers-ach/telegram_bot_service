@@ -63,12 +63,16 @@ class FoodBot(TelegramBot):
         self.states = {}
 
     def _save_shortcut(self, chatid, key, item):
+        item = self._sanatize(item)
         if chatid not in self.shortcuts:
             self.shortcuts[chatid] = {}
         key = key.lower()
         self.shortcuts[chatid][key] = item
         with open(self.shortcut_db, "w") as f:
             json.dump(self.shortcuts, f, indent=2)
+
+    def _sanatize(self, item):
+        return item.replace("*","x")
 
     def _get_shortcut(self, chatid, key):
         if chatid not in self.shortcuts:
@@ -196,9 +200,13 @@ class FoodBot(TelegramBot):
         day = date.strftime("%Y-%m-%d")
         time = date.strftime("%H:%M")
 
-        item = self._get_shortcut(chat_id, item)
-        self._db_put(chat_id, day, (time, item))
-        await update.message.reply_markdown(f"{day}: *{item}* at `{time}`")
+        for i in item.split("\n"):
+            i = self._sanatize(i)
+            if not i:
+                continue
+            i = self._get_shortcut(chat_id, i)
+            self._db_put(chat_id, day, (time, i))
+            await update.message.reply_markdown(f"{day}: *{i}* at `{time}`")
 
 
     def generate_day(self, day):
@@ -206,6 +214,7 @@ class FoodBot(TelegramBot):
         text = ""
         day.sort(key=lambda x: x[0])
         for time, item in day:
+            item = self._sanatize(item)
             text += f"`{time}`: *{item}*\n"
         return text
 
