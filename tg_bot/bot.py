@@ -98,22 +98,19 @@ class TelegramBot:
         def call(foo):
             async def msg(update, context):
                 # for some reason we're not propogating the message context
-                # for now
                 self._lastupdate = update # memoize the last update
                 await foo(self, update)
 
             return msg
-
         for command in self.command_registry:
             logger.info("Found command %s", command.__name__)
             self.application.add_handler(CommandHandler(command.__name__, call(command)))
 
+        # add an alias for the start command as calling the help string
+        # /start is automatically sent when you add a bot on telegram
         async def start(update, context):
             await self.help(update)
         self.application.add_handler(CommandHandler("start", start))
-
-
-
 
         # add handler for non command messages
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._msghandle))
