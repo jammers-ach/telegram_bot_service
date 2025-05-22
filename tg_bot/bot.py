@@ -1,21 +1,22 @@
-import argparse
 import os
 import logging
 import asyncio
 import functools
 
-from telegram import ForceReply, Update
+from telegram import Update
 from telegram.constants import ChatAction, ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 logger = logging.getLogger(__name__)
 
 class TelegramBot:
-
     # Set to true if only authorized chats can talk
     only_authorized = True
-    command_registry = []
-    command_usage = []
+
+
+    _command_registry = []
+    _command_usage = []
+    _started = False
 
     @classmethod
     def command(cls, f_py=None, args=""):
@@ -35,8 +36,8 @@ class TelegramBot:
         print(f"command registered {f_py}: {args}")
         assert callable(f_py) or f_py is None
         def _decorator(func):
-            cls.command_registry.append(func)
-            cls.command_usage.append(f"`{func.__name__} {args}` {func.__doc__}")
+            cls._command_registry.append(func)
+            cls._command_usage.append(f"`{func.__name__} {args}` {func.__doc__}")
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
                 return func(*args, **kwargs)
@@ -62,7 +63,23 @@ class TelegramBot:
         self.bot_token = self.config["bot_token"]
         self._bot_init()
 
-        self.commands = []
+        self._deamon = False
+        self._lastupdate = None
+
+
+    def __del__(self):
+        logger.info("Bot being destroyed in __del__")
+
+        if self._started:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self._stop_standalone())
+                else:
+                    loop.run_until_complete(self._stop_standalone())
+            except Exception as e:
+                logger.info(e)
+                pass
 
     @property
     def config_dir(self):
@@ -98,16 +115,20 @@ class TelegramBot:
         def call(foo):
             async def msg(update, context):
                 # for some reason we're not propogating the message context
-                # for now
                 self._lastupdate = update # memoize the last update
                 await foo(self, update)
+                self._lastupdate = None
 
             return msg
-
-        for command in self.command_registry:
+        for command in self._command_registry:
             logger.info("Found command %s", command.__name__)
             self.application.add_handler(CommandHandler(command.__name__, call(command)))
 
+        # add an alias for the start command as calling the help string
+        # /start is automatically sent when you add a bot on telegram
+        async def startcmd(update, context):
+            await self.help(update)
+        self.application.add_handler(CommandHandler("start", startcmd))
 
         # add handler for non command messages
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._msghandle))
@@ -115,6 +136,7 @@ class TelegramBot:
 
     def start(self):
         logger.info("starting bot")
+        self._deamon = True
         self.application.post_init = self.__post_startup
         self.application.run_polling(allowed_updates=Update.ALL_TYPES)
 
@@ -126,9 +148,8 @@ class TelegramBot:
         helptext += self.description
         helptext += "\n\n"
 
-        helptext += "\n".join(self.command_usage)
+        helptext += "\n".join(self._command_usage)
         await update.message.reply_markdown(helptext)
-
 
 
     async def __post_startup(self, _):
@@ -136,32 +157,28 @@ class TelegramBot:
 
     async def post_startup(self):
         '''called when this bot has just started up'''
-        await self._send_message(self.chat_ids[0], f"{self.name} is starting up")
-
-    async def _send_message(self, chat_id, message, markdown=False):
-        '''Sends :message: to :chat_id:'''
-        assert chat_id in self.chat_ids, "unauthorised chat id"
-        async def job(context):
-            if markdown:
-                await context.bot.send_message(chat_id=chat_id, text=message, parse_mode=ParseMode.MARKDOWN)
-            else:
-                await context.bot.send_message(chat_id=chat_id, text=message)
-
-        self.application.job_queue.run_once(job, 0)
+        await self._send_message(f"{self.name} is starting up")
 
 
     async def _msghandle(self, update, context):
         self._authorized_check(update)
         logger.info("Got message: %s", update.message.text)
+        # memoize call the update
+        self._lastupdate = update
         await self.handle_update(update)
+        self._lastupdate = None
 
     async def _voicehandle(self, update, context):
         self._authorized_check(update)
         logger.info("Got voice: %s", update.message.text)
+        self._lastupdate = update
         try:
             await self.handle_voice(update)
-        except NotImplementedError as e:
+        except NotImplementedError:
             await update.message.reply_text("This bot cannot process voice")
+        finally:
+            await self.handle_update(update)
+
 
     async def handle_update(self, update):
         '''handles an update (i.e. a new message) coming into the bot
@@ -184,36 +201,86 @@ class TelegramBot:
                 raise PermissionError(f"{update.message.chat_id} not in authorised chat list")
 
 
-    async def single_send_msg(self, message, chat_ids=None, markdown=False):
-        '''starts the bot, sends a sync message to the first contact in the list
-        or a list of contacts
+    async def _start_standalone(self):
+        '''start the bot in standalone mode'''
+        if not self._deamon and not self._started:
+            logger.info("Starting application as standalone")
+            self._bot_init() #HACK - reinitilise the bot's queues since we're not doing it in it's own handler
+            await self.application.initialize()
+            await self.application.start()
+            self._started = True
 
-        then stops the bot'''
-        if not chat_ids:
-            chat_ids = [self.chat_ids[0]]
+    async def _stop_standalone(self):
+        '''stop the bot in standalone mode'''
+        if self._started:
+            logger.info("Stopping application as standalone")
+            await self.application.stop()
+            await self.application.shutdown()
 
-        async def send_msg():
-            for chat_id in chat_ids:
-                await self._send_message(chat_id, message, markdown=markdown)
-
-        await self._single_do(send_msg)
-
-
-
-    async def _single_do(self, function):
-        '''starts the bot, then calls a function, then stops the bot'''
-        self._bot_init() #HACK - reinitilise the bot's queues since we're not doing it in it's own handler
-        await self.application.initialize()
-        await self.application.start()
-        await function()
-        await self.application.stop()
-        await self.application.shutdown()
+    async def batch_send(self):
+        '''Call this when running in standalone mode to send all
+        the messages in the queue'''
+        # this is a HACK, ideally we'd like for `_stop_standalone`
+        # to be called from the destructor method
+        # without this, the queue gets emptied and no messages are sent
+        await self._stop_standalone()
 
 
     async def typing(self, update):
         '''sets the status to `typing`'''
         chat_id = update.message.chat_id
         await self.application.bot.send_chat_action(chat_id, ChatAction.TYPING)
+
+    async def _send(self, message, chat_id=None, parser=None):
+        '''Shortcut for sending messages, if this bot has recently recived a message
+        then it will reply to that message. If its running in standalone mode
+        then it will send that message to the chat_id specified
+        if no chat id has been specified it will send the same message to all the chatids it knows about'''
+        if self._lastupdate:
+            if not self._deamon:
+                raise Exception("Got an update but not running as deamon")
+            await self._lastupdate.message.reply_text(message, parse_mode=parser)
+
+        else:
+            await self._start_standalone()
+            logger.info("Sending '%s' stand alone..", message)
+
+            async def msgjob(context):
+                if chat_id is None:
+                    for cid in self.chat_ids:
+                        await context.bot.send_message(chat_id=cid, text=message, parse_mode=parser)
+                else:
+                    await context.bot.send_message(chat_id=chat_id, text=message, parse_mode=parser)
+
+            self.application.job_queue.run_once(msgjob, 0)
+
+    async def _send_message(self, message, chat_id=None):
+        await self._send(message, chat_id, parser=None)
+
+    async def _send_markdown(self, message, chat_id=None):
+        '''Same as send_message but with markdown text'''
+        await self._send(message, chat_id, parser=ParseMode.MARKDOWN)
+
+    async def _send_image(self, fp, chat_id=None):
+        '''Sends an image from a file pointer or a path to an image'''
+        if self._lastupdate:
+            if not self._deamon:
+                raise Exception("Got an update but not running as deamon")
+            await self._lastupdate.message.reply_photo(fp)
+        else:
+            await self._start_standalone()
+            logger.info("Sending image stand alone..")
+
+            async def msgjob(context):
+                if chat_id is None:
+                    for cid in self.chat_ids:
+                        await context.bot.send_photo(cid, fp)
+                else:
+                    await context.bot.send_photo(chat_id, fp)
+
+            self.application.job_queue.run_once(msgjob, 0)
+
+
 
 
 # hack because we want the help method to be a command.

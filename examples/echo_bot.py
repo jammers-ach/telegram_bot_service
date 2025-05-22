@@ -5,6 +5,7 @@ EchoBot: A telegram bot that echos what you say
 import argparse
 import logging
 import asyncio
+import os
 
 from tg_bot.bot import TelegramBot
 
@@ -24,33 +25,59 @@ after it thinks for a bit"""
         await update.message.reply_text(self.thinking_text)
         await self.typing(update)
         await asyncio.sleep(self.wait_time)
-        await update.message.reply_text(f"You said: {update.message.text}")
+        await self._send_message(f"You said: {update.message.text}")
 
 
     @TelegramBot.command(args="<NEW STRING>")
     async def change(self, update):
         """change the input string"""
         self.thinking_text = update.message.text.replace("/change ","")
-        await update.message.reply_text(f"Ok I will now set the thinking text to: {self.thinking_text}")
-
+        await self._send_message(f"Ok I will now set the thinking text to: {self.thinking_text}")
 
     @TelegramBot.command
-    async def send_image(self, update):
-        """sends an exmaple image"""
-        await update.message.reply_markdown("`Not implemented`")
+    async def self_test(self, update):
+        """Runs through the bots selftest"""
+        await self._send_message("Sending text")
+        await self._send_markdown("Sending `Markdown`")
+
+        file_path = os.path.join(self.config_dir, "example.png")
+        if os.path.exists(file_path):
+            await self._send_image(file_path)
+        else:
+            await self._send_markdown(f"no image in `{file_path}`")
+
+
+    async def send_message(self, message):
+        """Sends the message"""
+        await self._send_markdown(message)
+
+    async def send_image(self, image_path):
+        """Sends an image"""
+        await self._send_image(image_path)
 
 
 def run():
     parser = argparse.ArgumentParser(description="Echo bot, a pytho bot which echos back all of the text you send")
     parser.add_argument('--send', metavar='MESSAGE', help='Send a message')
+    parser.add_argument('--image', metavar='PATH TO IMAGE', help='Send an image')
 
     args = parser.parse_args()
 
+    bot = EchoBot()
     if args.send:
-        bot = EchoBot()
-        asyncio.run(bot.single_send_msg(args.send))
+        async def do_send():
+            await bot.send_message(f"Send from commandline {args.send}")
+            await bot.batch_send()
+
+        asyncio.run(do_send())
+
+    elif args.image:
+        async def do_send():
+            await bot.send_image(args.image)
+            await bot.batch_send()
+
+        asyncio.run(do_send())
     else:
-        bot = EchoBot()
         bot.start()
 
 

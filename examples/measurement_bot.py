@@ -36,15 +36,11 @@ chat_ids=<CHAT_IDS>
 import argparse
 import os
 import logging
-import asyncio
 import datetime
 import json
 import tempfile
 
-import matplotlib.dates as md
 import matplotlib.pyplot as plt
-from PIL import Image, ImageDraw, ImageFont
-from matplotlib.ticker import AutoMinorLocator, AutoLocator
 
 from tg_bot.bot  import TelegramBot
 
@@ -120,11 +116,11 @@ class MeasureBot(TelegramBot):
         """Displays all the keys that we have"""
         chat_id = str(update.message.chat_id)
         if chat_id not in self.db:
-            await update.message.reply_text("No data yet")
+            await self._send_message("No data yet")
             return
         else:
             keys = "\n".join(self.db[chat_id].keys())
-            await update.message.reply_text(keys)
+            await self._send_message(keys)
 
 
     @TelegramBot.command(args="<KEY>")
@@ -135,7 +131,7 @@ class MeasureBot(TelegramBot):
         try:
             key = update.message.text.split(" ", 1)[1].strip().lower()
         except IndexError:
-            await update.message.reply_text("please specify a key")
+            await self._send_message("please specify a key")
             return
 
         chat_id = str(update.message.chat_id)
@@ -143,9 +139,9 @@ class MeasureBot(TelegramBot):
         try:
             data = self._db_get(chat_id, key)["data"]
             text = [f"{key}: {value}" for key,value in data]
-            await update.message.reply_text("\n".join(text))
+            await self._send_message("\n".join(text))
         except KeyError:
-            await update.message.reply_text(f"{key} not found in database")
+            await self._send_markdown(f"`{key}` not found in database")
 
     @TelegramBot.command(args="<KEY>")
     async def graph(self, update):
@@ -153,24 +149,25 @@ class MeasureBot(TelegramBot):
         try:
             key = update.message.text.split(" ", 1)[1].strip().lower()
         except IndexError:
-            await update.message.reply_text("please specify a key")
+            await self._send_message("please specify a key")
             return
 
         chat_id = str(update.message.chat_id)
 
         try:
             data = self._db_get(chat_id, key)["data"]
+            data.sort(key=lambda x: x[0])
             ts, val = zip(*data)
             fig, ax = plot_measurements(ts, val, key)
 
             with tempfile.NamedTemporaryFile() as fp:
                 fig.savefig(fp, format="png")
                 fp.seek(0)
-                await update.message.reply_photo(fp)
+                await self._send_image(fp)
 
 
         except KeyError:
-            await update.message.reply_text(f"{key} not found in database")
+            await self._send_markdown(f"`{key}` not found in database")
 
 
     async def handle_update(self, update):
@@ -182,21 +179,21 @@ class MeasureBot(TelegramBot):
         if state == 0:
             try:
                 value = float(text)
-                await update.message.reply_text(f"*{value}*, what should this be stored under?")
+                await self._send_message(f"*{value}*, what should this be stored under?")
                 self.states[chat_id] = 1
                 self.last_value = value
                 self.last_date = datetime.datetime.now()
             except:
-                await update.message.reply_text(f"please enter a valid number.")
+                await self._send_message("please enter a valid number.")
         elif state == 1:
             value = self.last_value
             date = self.last_date
             key = text.lower()
             try:
                 self._db_put(chat_id, key, (date.timestamp(), value))
-                await update.message.reply_text(f"Added: {key}: {date}, {value}")
+                await self._send_markdown(f"Added: `{key}`: {date}, `{value}`")
             except Exception as e:
-                await update.message.reply_text(f"Failed to add to database")
+                await self._send_message("Failed to add to database")
                 raise e
 
 
@@ -205,7 +202,7 @@ class MeasureBot(TelegramBot):
 
 def run():
     parser = argparse.ArgumentParser(description="MeasureBot: stores timeseries data from conversations and graphs them")
-    args = parser.parse_args()
+    parser.parse_args()
 
     bot = MeasureBot()
     bot.start()
