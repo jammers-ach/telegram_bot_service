@@ -25,9 +25,9 @@ sheet_url=<SHEET_URL_FOR_SERVICE_ACCOUNT>
 # remind at 8am of who has a birthday today
 0 8 * * * /path/to/bot/birthday_bot.py -todays
 # remind on sunday evening who has birthdays in the next 2 weeks
-20 0 * * 0 /path/to/bot/birthday_bot.py -birthdays 2
+20 0 * * 0 /path/to/bot/birthday_bot.py -birthdays 14
 # remind on sunday who I need to get a present for in the next 4 weeks
-20 0 * * 0 /path/to/bot/birthday_bot.py -presents 4
+20 0 * * 0 /path/to/bot/birthday_bot.py -presents 28
 
 5) setup the bot service (optional)
    The cronjobs will do the checking.
@@ -107,7 +107,7 @@ class BirthdayBot(TelegramBot):
         birthdays = self._filter_birthdays(lambda x: True)
 
         msg = "\n".join([f'{b["DOB"]}, {b["Who"]}' for b in birthdays])
-        await update.message.reply_text(msg)
+        await self._send_message(msg)
 
 
     @TelegramBot.command(args="<days>")
@@ -117,23 +117,21 @@ class BirthdayBot(TelegramBot):
             text = update.message.text.split(" ", 1)[1].strip()
 
             if not text.isnumeric():
-                await update.message.reply_text("please specify a number of days")
+                await self._send_message("please specify a number of days")
                 return
 
             days = int(text)
         except (IndexError, ValueError) as e:
-                await update.message.reply_text("please specify a number of days")
+                await self._send_message("please specify a number of days")
                 return
 
         msg = self.make_birthday_msg(days)
 
         if msg == "":
-            await update.message.reply_text(f"No birthdays in the next {days} days")
+            await self._send_message(f"No birthdays in the next {days} days")
         else:
-            await update.message.reply_text(f"Here is a list of birthdays in the next {days} days")
-            await update.message.reply_text(msg)
-
-
+            await self._send_message(f"Here is a list of birthdays in the next {days} days")
+            await self._send_message(msg)
 
     def make_birthday_msg(self, days, extra_filter=None):
         '''makes a message with the inumber of days remaining'''
@@ -165,21 +163,21 @@ class BirthdayBot(TelegramBot):
     async def todays(self):
         msg = self.make_birthday_msg(1)
         if msg:
-            await self.single_send_msg(msg, chat_ids=self.chat_ids)
+            await self._send_message(msg)
         else:
             print("no birthdays today")
 
     async def birthdays(self, days):
         msg = self.make_birthday_msg(days)
         if msg:
-            await self.single_send_msg(msg, chat_ids=self.chat_ids)
+            await self._send_message(msg)
         else:
             print(f"no birthdays in the next {days}")
 
     async def presents(self, days):
         msg = self.make_birthday_msg(days, lambda x: x["Present"] != "")
         if msg:
-            await self.single_send_msg(msg, chat_ids=self.chat_ids)
+            await self._send_message(msg)
         else:
             print(f"no birthdays in the next {days}")
 
@@ -187,19 +185,29 @@ def run():
     parser = argparse.ArgumentParser(description="Birthday bot: A telegram bot that reads birthdays from a google sheet and notifies you if they are needed")
 
     parser.add_argument('-todays', action='store_true', help='List who has birthdays today')
-    parser.add_argument('-birthdays', type=int, metavar='weeks', help='List all people with birthdays in the next <weeks> number of weeks')
-    parser.add_argument('-presents', type=int, metavar='weeks', help='List all people and their presents in the next <weeks> number of weeks')
+    parser.add_argument('-birthdays', type=int, metavar='days', help='List all people with birthdays in the next <days> number of days')
+    parser.add_argument('-presents', type=int, metavar='days', help='List all people and their presents in the next <days> number of days')
 
 
     args = parser.parse_args()
 
     bot = BirthdayBot()
     if args.todays:
-        asyncio.run(bot.todays())
+        async def do_send():
+            await bot.todays()
+            await bot.batch_send()
+        asyncio.run(do_send())
     elif args.birthdays:
-        asyncio.run(bot.birthdays(args.birthdays))
+        async def do_send():
+            await bot.birthdays(args.birthdays)
+            await bot.batch_send()
+        asyncio.run(do_send())
     elif args.presents:
-        asyncio.run(bot.presents(args.presents))
+        async def do_send():
+            await bot.presents(args.presents)
+            await bot.batch_send()
+
+        asyncio.run(do_send())
     else:
         bot.start()
 
