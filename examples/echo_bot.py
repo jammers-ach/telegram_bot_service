@@ -51,22 +51,33 @@ after it thinks for a bit"""
         """Sends the message"""
         await self._send_markdown(message)
 
+    async def send_image(self, image_path):
+        """Sends an image"""
+        await self._send_image(image_path)
+
 
 def run():
     parser = argparse.ArgumentParser(description="Echo bot, a pytho bot which echos back all of the text you send")
     parser.add_argument('--send', metavar='MESSAGE', help='Send a message')
+    parser.add_argument('--image', metavar='PATH TO IMAGE', help='Send an image')
 
     args = parser.parse_args()
 
+    bot = EchoBot()
     if args.send:
-        bot = EchoBot()
         async def do_send():
             await bot.send_message(f"Send from commandline {args.send}")
             await bot.batch_send()
 
         asyncio.run(do_send())
+
+    elif args.image:
+        async def do_send():
+            await bot.send_image(args.image)
+            await bot.batch_send()
+
+        asyncio.run(do_send())
     else:
-        bot = EchoBot()
         bot.start()
 
 

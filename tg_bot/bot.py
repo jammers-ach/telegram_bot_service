@@ -1,12 +1,11 @@
-import argparse
 import os
 import logging
 import asyncio
 import functools
 
-from telegram import ForceReply, Update
+from telegram import Update
 from telegram.constants import ChatAction, ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +174,7 @@ class TelegramBot:
         self._lastupdate = update
         try:
             await self.handle_voice(update)
-        except NotImplementedError as e:
+        except NotImplementedError:
             await update.message.reply_text("This bot cannot process voice")
         finally:
             await self.handle_update(update)
@@ -262,9 +261,26 @@ class TelegramBot:
         '''Same as send_message but with markdown text'''
         await self._send(message, chat_id, parser=ParseMode.MARKDOWN)
 
-    async def _send_image(self, message, chat_id=None):
-        '''Same as send_image but with markdown text'''
-        raise NotImplementedError("can't send image just yet")
+    async def _send_image(self, fp, chat_id=None):
+        '''Sends an image from a file pointer or a path to an image'''
+        if self._lastupdate:
+            if not self._deamon:
+                raise Exception("Got an update but not running as deamon")
+            await self._lastupdate.message.reply_photo(fp)
+        else:
+            await self._start_standalone()
+            logger.info("Sending image stand alone..")
+
+            async def msgjob(context):
+                if chat_id is None:
+                    for cid in self.chat_ids:
+                        await context.bot.send_photo(cid, fp)
+                else:
+                    await context.bot.send_photo(chat_id, fp)
+
+            self.application.job_queue.run_once(msgjob, 0)
+
+
 
 
 # hack because we want the help method to be a command.
