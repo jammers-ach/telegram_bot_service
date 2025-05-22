@@ -17,6 +17,7 @@ class TelegramBot:
 
     _command_registry = []
     _command_usage = []
+    _started = False
 
     @classmethod
     def command(cls, f_py=None, args=""):
@@ -64,7 +65,6 @@ class TelegramBot:
         self._bot_init()
 
         self._deamon = False
-        self._started = False
         self._lastupdate = None
 
 
@@ -232,7 +232,7 @@ class TelegramBot:
         chat_id = update.message.chat_id
         await self.application.bot.send_chat_action(chat_id, ChatAction.TYPING)
 
-    async def _send_message(self, message, chat_id=None):
+    async def _send(self, message, chat_id=None, parser=None):
         '''Shortcut for sending messages, if this bot has recently recived a message
         then it will reply to that message. If its running in standalone mode
         then it will send that message to the chat_id specified
@@ -240,7 +240,7 @@ class TelegramBot:
         if self._lastupdate:
             if not self._deamon:
                 raise Exception("Got an update but not running as deamon")
-            await self._lastupdate.message.reply_text(message)
+            await self._lastupdate.message.reply_text(message, parse_mode=parser)
 
         else:
             await self._start_standalone()
@@ -249,16 +249,18 @@ class TelegramBot:
             async def msgjob(context):
                 if chat_id is None:
                     for cid in self.chat_ids:
-                        await context.bot.send_message(chat_id=cid, text=message, parse_mode=ParseMode.MARKDOWN)
+                        await context.bot.send_message(chat_id=cid, text=message, parse_mode=parser)
                 else:
-                    await context.bot.send_message(chat_id=chat_id, text=message, parse_mode=ParseMode.MARKDOWN)
+                    await context.bot.send_message(chat_id=chat_id, text=message, parse_mode=parser)
 
             self.application.job_queue.run_once(msgjob, 0)
 
+    async def _send_message(self, message, chat_id=None):
+        await self._send(message, chat_id, parser=None)
 
     async def _send_markdown(self, message, chat_id=None):
         '''Same as send_message but with markdown text'''
-        await self._send_message(message, chat_id)
+        await self._send(message, chat_id, parser=ParseMode.MARKDOWN)
 
     async def _send_image(self, message, chat_id=None):
         '''Same as send_image but with markdown text'''
