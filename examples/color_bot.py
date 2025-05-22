@@ -35,6 +35,7 @@ import logging
 import asyncio
 import gspread
 import datetime
+import traceback
 
 from tg_bot.bot  import TelegramBot
 
@@ -67,66 +68,57 @@ class ColorDayBot(TelegramBot):
 
     def _refresh_sheet(self):
         self.sheet = self.gc.open_by_url(self.config['sheet_url'])
-        self.emotions = self.sheet.get_worksheet(0)
-        self.whys = self.sheet.get_worksheet(1)
-        self.log = self.sheet.get_worksheet(2)
 
+    def _get_sheet(self, date):
+        '''worksheet is listed by the year'''
+        year = date.strftime("%Y")
+        try:
+            return self.sheet.worksheet(year)
+        except gspread.exceptions.WorksheetNotFound as e:
+            worksheet = self.sheet.add_worksheet(title=year, rows=54, cols=8)
+            return worksheet
+
+    @TelegramBot.command(args="<NEW MSG>")
+    async def yesterday(self, update):
+        '''update yesterdays message (incase you forgot)'''
+        text = update.message.text.replace("/yesterday","").strip()
+        await self.make_update(update, text, datetime.date.today() - datetime.timedelta(days=1))
 
     async def make_update(self, update, text, date):
-        if text.lower().startswith("why"):
-            text = text[4::]
-            await update.message.reply_text(f"You why: {text}")
-            try:
-                self.why_square(date, text)
-                await update.message.reply_text(f"Updated {date} with {text}")
-            except Exception as e:
-                await update.message.reply_text(f"failed: {e}")
-        else:
-            text = text.lower()
-            if text not in colors:
-                await update.message.reply_text(f"Invalid color {text}")
-                color_list = "\n".join(colors.keys())
-                await update.message.reply_text(f"Possible colors are: {color_list}")
-                return
+        text = text.lower()
+        if text not in colors:
+            await self._send_message(f"Invalid color {text}")
+            color_list = "\n".join(colors.keys())
+            await self._send_message(f"Possible colors are: {color_list}")
+            return
 
-            try:
-                self.color_square(date, text)
-                await update.message.reply_text(f"Updated {date} with {text}")
-            except Exception as e:
-                await update.message.reply_text(f"failed: {e}")
+        try:
+            self.color_square(date, text)
+            await self._send_markdown(f"Updated `{date}` with `{text}`")
+        except Exception as e:
+            await self._send_message(f"failed: {e}")
 
     async def handle_update(self, update):
         text = update.message.text
         await self.make_update(update, text, datetime.date.today())
 
 
-    def why_square(self, date, whys):
-        row, col = week_and_day(date)
-        cell = self.whys.cell(row, col).address
-        self.whys.update(cell, whys)
-
-
     def color_square(self, date, color):
         row, col = week_and_day(date)
-        cell = self.emotions.cell(row, col).address
+        sheet = self._get_sheet(date)
+        cell = sheet.cell(row, col).address
         logger.info(f"for {date} got ({row}, {col}), cell {cell}")
 
         r,g,b = colors[color]
 
-        self.emotions.format(cell, {
+        sheet.format(cell, {
             "backgroundColor":{
                 "red": r,
                 "green": g,
                 "blue": b
             }
         })
-        self.emotions.update(cell, 'x')
-
-    @TelegramBot.command(args="<NEW MSG>")
-    async def yesterday(self, update):
-        '''update yesterdays message (incase you forgot)'''
-        text = update.message.text.replace("/yesterday","").strip()
-        self.make_update(update, text, datetime.date.today() - datetime.timedelta(days=1))
+        sheet.update_acell(cell, 'x')
 
     @TelegramBot.command
     async def help(self, update):
@@ -139,19 +131,22 @@ class ColorDayBot(TelegramBot):
         Orange = started bad but got good
         Purple = started good but got bad
         black = very very back
+
+
+        /yesterday <msg> set yesterdays message, incase you forgot
         '''
-        await update.message.reply_text(msg)
+        await self._send_message(msg)
 
     async def check(self):
         """Checks to see if someone has filled in the cell for today"""
         date = datetime.datetime.today()
         row, col = week_and_day(date)
-        cell = self.emotions.cell(row, col).value
+        cell = self._get_sheet(date).cell(row, col).value
         logger.info(f"checking {row}, {col}")
 
         if cell != "x":
             logger.info("Not filled in")
-            await self.single_send_msg("what color for today?", chat_ids=self.chat_ids)
+            await self._send_message("what color for today?")
         else:
             logger.info("filled in")
 
@@ -165,7 +160,11 @@ def run():
     bot = ColorDayBot()
 
     if args.check:
-        asyncio.run(bot.check())
+
+        async def do_send():
+            await bot.check()
+            await bot.batch_send()
+        asyncio.run(do_send())
     else:
         bot.start()
 
