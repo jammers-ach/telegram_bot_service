@@ -9,7 +9,7 @@ Like this:
 
 > biscuit
 < logged 10:14 biscuit
-> /log 08:30 cheeky marshmallow
+> 0830 cheeky marshmallow
 < logged 08:30 cheeky marshmallow
 > /day
 < Today you ate:
@@ -32,6 +32,7 @@ import logging
 import asyncio
 import datetime
 import json
+import re
 
 from tg_bot.bot  import TelegramBot
 
@@ -41,7 +42,25 @@ logger = logging.getLogger(__name__)
 class FoodBot(TelegramBot):
     '''bot to track what you eat'''
     name = "FoodBot"
-    description = "bot to track what you eat"
+    description = """bot to track what you eat, send it a message with something you ate and it will log that you ate it at that time
+```
+> biscuit
+< logged 10:14 biscuit
+> 0830 cheeky marshmallow
+< logged 08:30 cheeky marshmallow
+> /day
+< Today you ate:
+< 08:30 - cheeky marshmaoow
+< 10:14 - biscuit
+< 12:00 - some lunch
+> /day wednesday
+< on wednesday you ate:
+....
+> /shortcut c cookie :)
+> 1500 c
+< logged 15:00 cookie :)
+```
+"""
 
 
     def __init__(self):
@@ -74,7 +93,46 @@ class FoodBot(TelegramBot):
     def _sanatize(self, item):
         return item.replace("*","x")
 
+
+    def _parse_message(self, message, chatid):
+        '''parses out a message and returns a time
+        if there's no time it will use the current time
+        it will look up the object in the shortcuts
+        so for example:
+             * "cookie" will return [<now>, "cookie"]
+             * "1025 cookie" will return ["10:25", "cookie"]
+             * "10 cookie" will return ["10:00", "cookie"]
+             * "10 c" will return ["10:00", "cookie"] if there's a shortcut mapping c -> cookie
+        '''
+        parts = message.strip().split(maxsplit=1)
+        time_str = None
+        object_str = None
+
+        # Regex to detect time pattern (e.g., "1025", "10")
+        time_pattern = re.compile(r'^(\d{1,2})(\d{2})?$')
+
+        if parts:
+            match = time_pattern.match(parts[0])
+            if match:
+                hour = int(match.group(1))
+                minute = int(match.group(2)) if match.group(2) else 0
+                time_str = f"{hour:02d}:{minute:02d}"
+                if len(parts) > 1:
+                    object_str = parts[1]
+            else:
+                object_str = parts[0]
+
+            if object_str:
+                object_str = self._get_shortcut(chatid, object_str)
+
+        if not time_str:
+            now = datetime.datetime.now()
+            time_str = now.strftime("%H:%M")
+
+        return [time_str, object_str or '']
+
     def _get_shortcut(self, chatid, key):
+        '''looks up the shortcut for a chatid, returns key if there wasn't any'''
         if chatid not in self.shortcuts:
             return key
         return self.shortcuts[chatid].get(key.lower(), key)
@@ -135,11 +193,17 @@ class FoodBot(TelegramBot):
             date = datetime.datetime.strptime(text, "%Y-%m-%d")
             return date
 
-    @TelegramBot.command
+    @TelegramBot.command(args="<food>")
     async def yesterday(self, update):
-        ''''''''
+        """Prints out what you ate yesterday, or logs food you ate yesterday"""
         yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
-        await self.post_day(update, yesterday)
+        text = update.message.text
+        if text == '/yesterday':
+            await self.post_day(update, yesterday)
+        else:
+            item = text.replace("/yesterday","")
+            await self.log_date(update, item, yesterday)
+
 
 
 
@@ -171,18 +235,6 @@ class FoodBot(TelegramBot):
 
             await update.message.reply_markdown(self.generate_day(keys))
 
-    @TelegramBot.command(args="<time> <thing>")
-    async def log(self, update):
-        '''logs something you ate at a specific time HH:MM incase you forgot'''
-        try:
-            time = update.message.text.split(" ", 2)[1].strip().lower()
-            item = update.message.text.split(" ", 2)[2].strip().lower()
-            dt = datetime.datetime.combine(datetime.datetime.today().date(), datetime.datetime.strptime(time, "%H:%M").time())
-            await self.log_date(update, item, dt)
-        except Exception as e:
-            await update.message.reply_text(str(e))
-
-
     @TelegramBot.command
     async def stats(self, update):
         '''top 10 popular food in the last 7 days, and new food in the last 7 days'''
@@ -196,15 +248,17 @@ class FoodBot(TelegramBot):
 
 
     async def log_date(self, update, item, date):
+        '''Stores that a specific food was eaten at a specific date'''
         chat_id = str(update.message.chat_id)
         day = date.strftime("%Y-%m-%d")
-        time = date.strftime("%H:%M")
+
+        time, item = self._parse_message(item, chat_id)
+        print(time, item)
 
         for i in item.split("\n"):
             i = self._sanatize(i)
             if not i:
                 continue
-            i = self._get_shortcut(chat_id, i)
             self._db_put(chat_id, day, (time, i))
             await update.message.reply_markdown(f"{day}: *{i}* at `{time}`")
 
