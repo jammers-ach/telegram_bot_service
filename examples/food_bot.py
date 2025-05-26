@@ -319,16 +319,16 @@ class FoodBot(TelegramBot):
     async def _send_weekly_stats(self, chat_id, update=None):
         msg = self.generate_top_list(chat_id)
         if not update:
-            await self.single_send_msg("In the last 7 days you ate:", chat_ids=[chat_id], markdown=True)
-            await self.single_send_msg(msg, chat_ids=[chat_id], markdown=True)
+            await self._send_markdown("In the last 7 days you ate:", chat_id=chat_id)
+            await self._send_markdown(msg, chat_id=chat_id)
         else:
             await update.message.reply_markdown("In the last 7 days you ate:")
             await update.message.reply_markdown(msg)
 
         msg = self.generate_new_food(chat_id)
         if not update:
-            await self.single_send_msg("New foods for you in the last 7 days:", chat_ids=[chat_id], markdown=True)
-            await self.single_send_msg(msg, chat_ids=[chat_id], markdown=True)
+            await self._send_markdown("New foods for you in the last 7 days:", chat_id=chat_id)
+            await self._send_markdown(msg, chat_id=chat_id)
         else:
             await update.message.reply_markdown("New foods for you in the last 7 days:")
             await update.message.reply_markdown(msg)
@@ -341,11 +341,11 @@ class FoodBot(TelegramBot):
             try:
                 keys = self.db[str(chat_id)].get(day,None)
                 if keys:
-                    await self.single_send_msg("Today you ate:", chat_ids=[chat_id,])
-                    await self.single_send_msg(self.generate_day(keys), chat_ids=[chat_id,], markdown=True)
+                    await self._send_message("Today you ate:", chat_id=chat_id)
+                    await self._send_markdown(self.generate_day(keys), chat_id=chat_id)
                 else:
-                    await self.single_send_msg("Today you ate nothing!?!", chat_ids=[chat_id,])
-                    await self.single_send_msg("maybe you should correct that?", chat_ids=[chat_id,])
+                    await self._send_message("Today you ate nothing!?!", chat_id=chat_id)
+                    await self._send_message("maybe you should correct that?", chat_id=chat_id)
             except Exception as e:
                 print(e)
 
@@ -360,9 +360,15 @@ def run():
     bot = FoodBot()
 
     if args.today:
-        asyncio.run(bot.today())
+        async def do_send():
+            await bot.today()
+            await bot.batch_send()
+        asyncio.run(do_send())
     elif args.week:
-        asyncio.run(bot.weekly_stats())
+        async def do_send():
+            await bot.weekly_stats()
+            await bot.batch_send()
+        asyncio.run(do_send())
     else:
         bot.start()
 
