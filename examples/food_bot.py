@@ -120,7 +120,7 @@ class FoodBot(TelegramBot):
                 if len(parts) > 1:
                     object_str = parts[1]
             else:
-                object_str = parts[0]
+                object_str = message
 
             if object_str:
                 object_str = self._get_shortcut(chatid, object_str)
