@@ -99,8 +99,13 @@ class ColorDayBot(TelegramBot):
             await self._send_message(f"failed: {e}")
 
     async def handle_update(self, update):
+        if update.message.reply_to_message:
+            date = update.message.reply_to_message.date
+            logger.info("This was a reply to message on %s", date)
+        else:
+            date = datetime.date.today()
         text = update.message.text
-        await self.make_update(update, text, datetime.date.today())
+        await self.make_update(update, text, date)
 
 
     def color_square(self, date, color):
@@ -132,6 +137,7 @@ class ColorDayBot(TelegramBot):
         Purple = started good but got bad
         black = very very back
 
+        reply to a message to set the color for that day
 
         /yesterday <msg> set yesterdays message, incase you forgot
         '''
