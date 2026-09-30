@@ -133,6 +133,7 @@ class TelegramBot:
         # add handler for non command messages
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._msghandle))
         self.application.add_handler(MessageHandler(filters.VOICE, self._voicehandle))
+        self.application.add_handler(MessageHandler(filters.Document.PDF, self._pdfhandle))
 
     def start(self):
         logger.info("starting bot")
@@ -179,6 +180,17 @@ class TelegramBot:
         finally:
             await self.handle_update(update)
 
+    async def _pdfhandle(self, update, context):
+        self._authorized_check(update)
+        logger.info("Got pdfile: %s", update.message.text)
+        self._lastupdate = update
+        try:
+            await self.handle_pdf(update)
+        except NotImplementedError:
+            await update.message.reply_text("This bot cannot process pdffiles")
+        finally:
+            await self.handle_update(update)
+
 
     async def handle_update(self, update):
         '''handles an update (i.e. a new message) coming into the bot
@@ -194,6 +206,15 @@ class TelegramBot:
         await new_file.download_to_drive('/tmp/foo.ogg')
         '''
         raise NotImplementedError("Bot implement handle_voice")
+
+    async def handle_pdf(self, update):
+        '''handles a pdf file that has been sent
+
+        the file can be downloaded like this
+        new_file = await update.message.effective_attachment.get_file()
+        await new_file.download_to_drive('/tmp/foo.pdf')
+        '''
+        raise NotImplementedError("Bot implement handle_pdf")
 
     def _authorized_check(self, update):
         if self.only_authorized:
@@ -279,7 +300,6 @@ class TelegramBot:
                     await context.bot.send_photo(chat_id, fp)
 
             self.application.job_queue.run_once(msgjob, 0)
-
 
 
 
