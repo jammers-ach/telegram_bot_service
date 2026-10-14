@@ -11,6 +11,7 @@ from typing import Any, Awaitable, Callable
 from telegram import Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.error import BadRequest
 
 logger = logging.getLogger(__name__)
 
@@ -366,11 +367,14 @@ class TelegramBot:
         await self._start_standalone()
         chat_ids = [chat_id] if chat_id is not None else self.chat_ids
         for target_chat_id in chat_ids:
-            await self.application.bot.send_message(
-                chat_id=target_chat_id,
-                text=message,
-                parse_mode=parser,
-            )
+            try:
+                await self.application.bot.send_message(
+                    chat_id=target_chat_id,
+                    text=message,
+                    parse_mode=parser,
+                )
+            except BadRequest as e:
+                logger.info(f"Failed to send message to chat id {chat_id}")
 
     async def _send_message(
         self, message: str, chat_id: int | None = None
